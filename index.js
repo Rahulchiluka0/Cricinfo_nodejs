@@ -1,13 +1,24 @@
+
 const { Telegraf } = require("telegraf");
 const axios = require("axios");
+const express = require("express");
 const process = require("process");
 
-// Your Bot API Token and Chat ID
-const API_TOKEN = "6945220081:AAGeGPKdXjuKK2VCbXw2fJtYRgYUYn6dYSY";
-const ChatID = "1029681168";
+// Your Bot API Token (Set this in Vercel environment variables)
+const API_TOKEN =
+  process.env.BOT_API_TOKEN || "6945220081:AAGeGPKdXjuKK2VCbXw2fJtYRgYUYn6dYSY";
+const ChatID = process.env.CHAT_ID || "YOUR_CHAT_ID";
 
 // Initialize bot
 const bot = new Telegraf(API_TOKEN);
+const app = express();
+
+// Use the webhook callback
+app.use(bot.webhookCallback("/bot"));
+
+// Set the webhook for your bot (replace with your Vercel deployment URL)
+const url = process.env.VERCEL_URL || "https://cricinfo-nodejs.vercel.app"; // Change this to your Vercel project URL
+bot.telegram.setWebhook(`${url}/bot`);
 
 // Fetch cricket match details from the API
 async function fetchMatches() {
@@ -78,7 +89,6 @@ async function pollForUpdates(ChatID, seriesId, matchId) {
     const matchData = await fetchMatchDetails(seriesId, matchId);
     if (matchData && matchData.recentBallCommentary) {
       const recentBall = matchData.recentBallCommentary.ballComments[0];
-
       const oversActual = recentBall.oversActual;
 
       // Only send updates if not already sent
@@ -146,9 +156,6 @@ bot.on("text", async (ctx) => {
     if (matchNumber > 0 && matchNumber <= matches.length) {
       const selectedMatch = matches[matchNumber - 1];
 
-      const liveMatchUrl = `https://www.espncricinfo.com/series/${selectedMatch.seriesSlug}-${selectedMatch.seriesId}/${selectedMatch.matchName}-${selectedMatch.scribeId}/live-cricket-score`;
-      console.log(liveMatchUrl); // Log for debugging
-
       await ctx.reply(`Fetching updates for ${selectedMatch.matchName}...`);
       await pollForUpdates(
         ctx.chat.id,
@@ -167,9 +174,10 @@ bot.on("text", async (ctx) => {
   }
 });
 
-// Start the bot
-bot.launch();
+// Start the express app to listen for incoming requests
+app.get("/", (req, res) => {
+  res.send("Telegram bot is up and running!");
+});
 
-// Handle graceful stop
-process.once("SIGINT", () => bot.stop("SIGINT"));
-process.once("SIGTERM", () => bot.stop("SIGTERM"));
+// Export the app for deployment on Vercel
+module.exports = app;
